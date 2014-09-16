@@ -8,6 +8,7 @@ import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
+import java.util.Arrays;
 import java.util.Random;
 
 /**
@@ -18,6 +19,15 @@ class WhirlView extends SurfaceView implements Runnable {
     int [] field = null;
     int [] field2 = null;
     int [] pixels = null;
+
+    int [][] cache = null;
+    int [] hash = null;
+    int curHash = 0;
+    int cachePtr = 0;
+    int firstCache, lastCache;
+    boolean cacheWasFound = false;
+    public static final int MAX_IN_CACHE = 50;
+
     int width = 240;
     int height = 320;
     final int MAX_COLOR = 10;
@@ -70,9 +80,11 @@ class WhirlView extends SurfaceView implements Runnable {
 
     void initField() {
         paint = new Paint();
-        bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        bmp = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565);
         field = new int[width * height];
         pixels = new int[width * height];
+        cache = new int[MAX_IN_CACHE][width * height];
+        hash = new int[MAX_IN_CACHE];
 
         Random rand = new Random();
         for (int x = 0; x < width; x++) {
@@ -105,15 +117,46 @@ class WhirlView extends SurfaceView implements Runnable {
     }
 
     void updateField() {
+        if (cacheWasFound) {
+            cachePtr++;
+            if (cachePtr == MAX_IN_CACHE) {
+                cachePtr = 0;
+            }
+            if (cachePtr == lastCache) {
+                cachePtr = firstCache;
+            }
+            pixels = cache[cachePtr];
+            return;
+        }
+
         field2 = new int[width * height];
+        curHash = 0;
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 int newColor = getNewColor(x, y);
                 field2[y * width + x] = newColor;
                 pixels[y * width + x] = palette[newColor];
+                cache[cachePtr][y * width + x] = palette[newColor];
+                curHash = curHash * 31 + palette[newColor] + 1;
             }
         }
         field = field2;
+        hash[cachePtr] = curHash;
+
+        for (int i = 0; i < MAX_IN_CACHE; i++) {
+            if (i != cachePtr && hash[i] == curHash && Arrays.equals(cache[i], pixels)) {
+                cacheWasFound = true;
+                firstCache = i;
+                lastCache = cachePtr;
+                cachePtr = firstCache;
+                return;
+            }
+        }
+
+        cachePtr++;
+        if (cachePtr == MAX_IN_CACHE) {
+            cachePtr = 0;
+        }
     }
 
     @Override
